@@ -1,4 +1,4 @@
-﻿import { useState } from "react"; // eslint-disable-line
+﻿import { useState, useEffect } from "react"; // eslint-disable-line
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const PALETTE = ["#C8A96E", "#7BBFAE", "#B8849A", "#8AA4C8", "#B8C88A", "#E08A6A", "#A78BCC", "#6AC8C8", "#CC9A7B", "#7BA8CC", "#C8C87B", "#CC7BA8", "#8ACC8A", "#CCB07B", "#7BBBC8"];
@@ -139,6 +139,14 @@ const INIT_PROJECTS = [
     makeProject({ name: "Sky Villas", client: "Sobha", type: "Villa", color: "#5aabcc", startDate: "2026-03-01", endDate: "2026-06-30", description: "Premium villa cluster renders" }),
     makeProject({ name: "Nexus Mall", client: "Prestige", type: "Commercial", color: "#B8849A", startDate: "2026-01-15", endDate: "2026-05-15", status: "On Hold", description: "Commercial complex walkthrough" }),
 ];
+
+function loadFromStorage() {
+    try {
+        const saved = localStorage.getItem("immersive-tracker-data");
+        if (saved) return JSON.parse(saved);
+    } catch { }
+    return null;
+}
 
 // ─── MEMBER MODAL ─────────────────────────────────────────────────────────────
 function MemberModal({ member, projects, onSave, onClose, onDelete }) {
@@ -840,9 +848,15 @@ function ProjectDetailScreen({ project, onUpdateProject, onBack }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
-    const [projects, setProjects] = useState(INIT_PROJECTS);
-    const [globalTeam, setGlobalTeam] = useState(INITIAL_GLOBAL_TEAM);
+    const saved = loadFromStorage();
+    const [projects, setProjects] = useState(saved?.projects || INIT_PROJECTS);
+    const [globalTeam, setGlobalTeam] = useState(saved?.globalTeam || INITIAL_GLOBAL_TEAM);
     const [openProjectId, setOpenProjectId] = useState(null);
+
+    // Autosave whenever projects or team changes
+    useEffect(() => {
+        try { localStorage.setItem("immersive-tracker-data", JSON.stringify({ projects, globalTeam })); } catch { }
+    }, [projects, globalTeam]);
     const openProject = projects.find(p => p.id === openProjectId);
 
     if (openProject) return <ProjectDetailScreen project={openProject} onUpdateProject={p => setProjects(prev => prev.map(x => x.id === p.id ? p : x))} onBack={() => setOpenProjectId(null)} />;
