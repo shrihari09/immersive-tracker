@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+﻿import { useState } from "react"; // eslint-disable-line
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const PALETTE = ["#C8A96E", "#7BBFAE", "#B8849A", "#8AA4C8", "#B8C88A", "#E08A6A", "#A78BCC", "#6AC8C8", "#CC9A7B", "#7BA8CC", "#C8C87B", "#CC7BA8", "#8ACC8A", "#CCB07B", "#7BBBC8"];
@@ -215,7 +215,7 @@ function TeamScreen({ globalTeam, projects, onUpdateTeam, onOpenProject }) {
     const availCount = globalTeam.filter(m => m.availability === "Available").length;
     const busyCount = globalTeam.filter(m => m.availability === "Busy").length;
     const leaveCount = globalTeam.filter(m => m.availability === "On Leave").length;
-    const totalActive = projects.reduce((a, p) => a + (p.status === "Active" ? 1 : 0), 0);
+
 
     const selS = { ...inputStyle, padding: "6px 8px", fontSize: 11, width: "auto" };
     const allRoles = [...new Set(globalTeam.map(m => m.role))];
@@ -457,7 +457,7 @@ function ProjectListScreen({ projects, globalTeam, onOpen, onNewProject, onEditP
     function downloadReport(p) {
         const done = p.tasks.filter(t => t.status === "Done").length, inProg = p.tasks.filter(t => t.status === "In Progress").length, blocked = p.tasks.filter(t => t.status === "Blocked").length, review = p.tasks.filter(t => t.status === "Review").length, notSt = p.tasks.filter(t => t.status === "Not Started").length;
         const pct = p.tasks.length > 0 ? Math.round((done / p.tasks.length) * 100) : 0, totalMD = p.tasks.reduce((a, t) => a + t.manDays, 0), usedMD = p.tasks.reduce((a, t) => a + t.daysUsed, 0), overdue = p.tasks.filter(t => t.endDate < TODAY_STR && t.status !== "Done");
-        const cadRcv = p.cad.filter(c => c.status === "Received" || c.status === "In Use").length, cadAw = p.cad.filter(c => c.status === "Awaiting from Client").length, cadIss = p.cad.filter(c => c.status === "Issue — Missing/Incomplete").length;
+
         const totalDays = daysBetween(p.startDate, p.endDate), elapsed = Math.max(0, Math.min(totalDays, daysBetween(p.startDate, TODAY_STR))), remaining = Math.max(0, totalDays - elapsed);
         const sectionRows = SECTIONS.map(sec => { const st = p.tasks.filter(t => t.section === sec); if (!st.length) return ""; const sd = st.filter(t => t.status === "Done").length, sp = st.filter(t => t.status === "In Progress").length, sb = st.filter(t => t.status === "Blocked").length, spct = Math.round((sd / st.length) * 100); return `<tr><td>${sec}</td><td>${st.length}</td><td>${sd}</td><td>${sp}</td><td>${sb}</td><td>${spct}%</td></tr>`; }).join("");
         const taskRows = p.tasks.map(t => { const od = t.endDate < TODAY_STR && t.status !== "Done"; return `<tr style="${od ? "background:#fff8f8" : ""}"><td>${t.task}</td><td>${t.section}</td><td>${t.artist}</td><td style="color:${STATUS[t.status]?.text || "#555"}">${t.status}</td><td>${t.priority}</td><td>${t.manDays}d</td><td>${t.daysUsed}d</td><td>${formatDate(t.startDate)}</td><td>${formatDate(t.endDate)}</td><td>${od ? "⚠ Overdue" : ""}</td></tr>`; }).join("");
