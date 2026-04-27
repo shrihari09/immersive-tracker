@@ -28,8 +28,26 @@ const ROLES = ["3D Artist","UE5 Artist","Interior Artist","Foliage Artist","Nigh
 function uid() { return Math.random().toString(36).substr(2,9); }
 function parseDateSafe(str) { const d=new Date(str); return isNaN(d)?new Date():d; }
 function daysBetween(a,b) { return Math.round((parseDateSafe(b)-parseDateSafe(a))/86400000); }
+function calendarDaysBetween(a,b) { return Math.round((parseDateSafe(b)-parseDateSafe(a))/86400000); }
 function formatDate(str) { return parseDateSafe(str).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"}); }
-function addDays(dateStr,days) { const d=new Date(dateStr); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function isWeekend(d) { const day=new Date(d).getDay(); return day===0||day===6; }
+function addWorkDays(dateStr,days) {
+  let d=new Date(dateStr); let added=0;
+  while(added<days){ d.setDate(d.getDate()+1); if(!isWeekend(d)) added++; }
+  return d.toISOString().slice(0,10);
+}
+function addDays(dateStr,days) { return addWorkDays(dateStr,days-1); }
+function workDaysBetween(startStr,endStr) {
+  let count=0; let d=new Date(startStr);
+  const end=new Date(endStr);
+  while(d<=end){ if(!isWeekend(d)) count++; d.setDate(d.getDate()+1); }
+  return count;
+}
+function nextWorkDay(dateStr) {
+  let d=new Date(dateStr); d.setDate(d.getDate()+1);
+  while(isWeekend(d)) d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
 const TODAY_STR = new Date().toISOString().slice(0,10);
 
 // ─── THEME ───────────────────────────────────────────────────────────────────
@@ -101,7 +119,7 @@ function seedTasks(start) {
   const result=[]; let cursor=s, p4s=s, p4e=s;
   phases.forEach((phase,idx)=>{
     const ps=phase.parallel?p4s:cursor; let ts=ps;
-    phase.tasks.forEach(([task,manDays,priority,notes])=>{ const te=addDays(ts,manDays-1); result.push({id:uid(),section:phase.section,task,artist:"Unassigned",manDays,daysUsed:0,status:"Not Started",priority,startDate:ts,endDate:te,notes}); ts=addDays(te,1); });
+    phase.tasks.forEach(([task,manDays,priority,notes])=>{ const te=addWorkDays(ts,manDays-1); result.push({id:uid(),section:phase.section,task,artist:"Unassigned",manDays,daysUsed:0,status:"Not Started",priority,startDate:ts,endDate:te,notes}); ts=nextWorkDay(te); });
     const pe=ts;
     if(idx===3){p4s=ps;p4e=pe;}
     if(!phase.parallel) cursor=pe;
@@ -702,40 +720,82 @@ function GanttView({ tasks,teamColors,projectStart,projectEnd,accentColor }) {
   const dates=(()=>{const arr=[],s=new Date(projectStart),e=new Date(projectEnd);for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1))arr.push(new Date(d));return arr;})();
   const months=[];let lm=-1;dates.forEach((d,i)=>{if(d.getMonth()!==lm){months.push({label:d.toLocaleString("default",{month:"short",year:"2-digit"}),col:i});lm=d.getMonth();}});
   const todayCol=dates.findIndex(d=>d.toISOString().slice(0,10)===TODAY_STR);
+  function isWeekend(d){return d.getDay()===0||d.getDay()===6;}
   function dc(str){const idx=dates.findIndex(d=>d.toISOString().slice(0,10)===str);return idx>=0?idx:0;}
   const grouped=SECTIONS.map(sec=>({sec,tasks:tasks.filter(t=>t.section===sec)})).filter(g=>g.tasks.length>0);
+  const totalRows=grouped.reduce((a,g)=>a+g.tasks.length+1,0);
+  const rowH=34;
   return (
     <div style={{padding:"18px 0"}}>
-      <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"72vh",borderRadius:10,border:`1px solid ${T.border}`,boxShadow:T.shadow}}>
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:10,fontSize:10,color:T.text3}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:14,height:14,borderRadius:3,background:"#fff0f0",border:"1px solid #f8c0c0"}}/><span>Weekend (Sat/Sun) — Holiday</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:3,height:14,background:`${ac}88`,borderRadius:2}}/><span>Today</span></div>
+      </div>
+      <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"72vh",borderRadius:10,border:`1px solid ${T.border}`,boxShadow:T.shadow,position:"relative"}}>
         <div style={{minWidth:260+dates.length*DAY_W}}>
+          {/* Month header */}
           <div style={{display:"flex",position:"sticky",top:0,zIndex:12,background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
             <div style={{width:260,minWidth:260,borderRight:`1px solid ${T.border}`,padding:"7px 14px",fontSize:9,color:T.text3,fontWeight:700}}>TASK / ARTIST</div>
             <div style={{position:"relative",flex:1,height:26}}>{months.map(m=><span key={m.label} style={{position:"absolute",left:m.col*DAY_W+3,top:7,fontSize:9,color:T.text3,fontWeight:600,pointerEvents:"none"}}>{m.label}</span>)}</div>
           </div>
-          <div style={{display:"flex",position:"sticky",top:26,zIndex:11,background:T.surface2,borderBottom:`1px solid ${T.border}`}}>
-            <div style={{width:260,minWidth:260,borderRight:`1px solid ${T.border}`}}/>
-            <div style={{display:"flex"}}>{dates.map((d,i)=><div key={i} style={{width:DAY_W,minWidth:DAY_W,textAlign:"center",padding:"3px 0",fontSize:8,fontWeight:i===todayCol?700:400,color:i===todayCol?ac:d.getDay()===0||d.getDay()===6?T.border:T.text4,borderRight:d.getDay()===0?`1px solid ${T.border}`:"none"}}>{d.getDate()}</div>)}</div>
+          {/* Day header */}
+          <div style={{display:"flex",position:"sticky",top:26,zIndex:11,borderBottom:`1px solid ${T.border}`}}>
+            <div style={{width:260,minWidth:260,borderRight:`1px solid ${T.border}`,background:T.surface2}}/>
+            <div style={{display:"flex"}}>
+              {dates.map((d,i)=>{
+                const weekend=isWeekend(d);
+                const isToday=i===todayCol;
+                return(
+                  <div key={i} style={{width:DAY_W,minWidth:DAY_W,textAlign:"center",padding:"2px 0",fontSize:8,fontWeight:isToday?700:500,color:isToday?ac:weekend?"#e06060":T.text3,background:weekend?"#fff0f0":T.surface2,borderRight:`0.5px solid ${T.border2}`,lineHeight:1.4}}>
+                    <div style={{fontSize:7,opacity:0.8}}>{["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()]}</div>
+                    <div>{d.getDate()}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+          {/* Rows */}
           {grouped.map(({sec,tasks:st})=>(
             <div key={sec}>
+              {/* Section header */}
               <div style={{display:"flex",background:"#f9f9fd",borderBottom:`1px solid ${T.border}`}}>
                 <div style={{width:260,minWidth:260,padding:"5px 14px",fontSize:9,fontWeight:700,color:ac,letterSpacing:"0.06em",borderRight:`1px solid ${T.border}`}}>▸ {sec}</div>
-                <div style={{flex:1,background:`repeating-linear-gradient(90deg,#f9f9fd 0,#f9f9fd 21px,${T.border2} 21px,${T.border2} 22px)`}}/>
+                <div style={{display:"flex"}}>
+                  {dates.map((d,i)=>(
+                    <div key={i} style={{width:DAY_W,minWidth:DAY_W,height:"100%",background:isWeekend(d)?"#fff0f0":"#f9f9fd",borderRight:`0.5px solid ${T.border2}`}}/>
+                  ))}
+                </div>
               </div>
-              {st.map(task=>{const sc=dc(task.startDate),ec=dc(task.endDate);const w=Math.max(1,ec-sc+1)*DAY_W;const cfg=STATUS[task.status]||STATUS["Not Started"];const pct=task.manDays>0?(task.daysUsed/task.manDays)*100:0;
-                return(<div key={task.id} style={{display:"flex",borderBottom:`1px solid ${T.border2}`,minHeight:34,alignItems:"center"}}>
-                  <div style={{width:260,minWidth:260,padding:"0 14px",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:2}}>
-                    <span style={{fontSize:11,color:T.text,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.task}</span>
-                    <div style={{display:"flex",gap:6,fontSize:8}}>{task.artist!=="Unassigned"&&<span style={{color:teamColors[task.artist]||T.text3,fontWeight:600}}>{task.artist}</span>}<span style={{color:cfg.text,fontWeight:600}}>● {task.status}</span></div>
-                  </div>
-                  <div style={{flex:1,position:"relative",height:34,background:`repeating-linear-gradient(90deg,${T.surface} 0,${T.surface} 21px,${T.surface2} 21px,${T.surface2} 22px)`}}>
-                    {todayCol>=0&&<div style={{position:"absolute",left:todayCol*DAY_W,top:0,bottom:0,width:2,background:`${ac}44`,zIndex:2}}/>}
-                    <div style={{position:"absolute",left:sc*DAY_W+1,top:7,width:w-2,height:20,borderRadius:5,background:cfg.bg,border:`1px solid ${cfg.border}`,overflow:"hidden",zIndex:3,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-                      <div style={{position:"absolute",inset:0,width:`${pct}%`,background:`${cfg.dot}28`}}/>
-                      <span style={{position:"relative",zIndex:1,fontSize:9,color:cfg.text,paddingLeft:5,lineHeight:"20px",whiteSpace:"nowrap",display:"block",overflow:"hidden",textOverflow:"ellipsis",fontWeight:500}}>{task.task}</span>
+              {/* Task rows */}
+              {st.map(task=>{
+                const sc=dc(task.startDate),ec=dc(task.endDate);
+                const w=Math.max(DAY_W,(ec-sc+1)*DAY_W);
+                const cfg=STATUS[task.status]||STATUS["Not Started"];
+                const pct=task.manDays>0?(task.daysUsed/task.manDays)*100:0;
+                return(
+                  <div key={task.id} style={{display:"flex",borderBottom:`1px solid ${T.border2}`,minHeight:rowH,alignItems:"center"}}>
+                    <div style={{width:260,minWidth:260,padding:"0 14px",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:2,minHeight:rowH}}>
+                      <span style={{fontSize:11,color:T.text,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.task}</span>
+                      <div style={{display:"flex",gap:6,fontSize:8}}>
+                        {task.artist!=="Unassigned"&&<span style={{color:teamColors[task.artist]||T.text3,fontWeight:600}}>{task.artist}</span>}
+                        <span style={{color:cfg.text,fontWeight:600}}>● {task.status}</span>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",position:"relative",minHeight:rowH,alignItems:"center"}}>
+                      {dates.map((d,i)=>(
+                        <div key={i} style={{width:DAY_W,minWidth:DAY_W,minHeight:rowH,background:isWeekend(d)?"#fff5f5":i%2===0?T.surface:T.surface2,borderRight:`0.5px solid ${T.border2}`,position:"relative"}}>
+                          {todayCol===i&&<div style={{position:"absolute",inset:0,borderLeft:`2px solid ${ac}88`,zIndex:2}}/>}
+                        </div>
+                      ))}
+                      {/* Task bar overlaid */}
+                      <div style={{position:"absolute",left:sc*DAY_W+1,top:7,width:w-2,height:20,borderRadius:5,background:cfg.bg,border:`1px solid ${cfg.border}`,overflow:"hidden",zIndex:3,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+                        <div style={{position:"absolute",inset:0,width:`${pct}%`,background:`${cfg.dot}28`}}/>
+                        <span style={{position:"relative",zIndex:1,fontSize:9,color:cfg.text,paddingLeft:5,lineHeight:"20px",whiteSpace:"nowrap",display:"block",overflow:"hidden",textOverflow:"ellipsis",fontWeight:500}}>{task.task}</span>
+                      </div>
                     </div>
                   </div>
-                </div>);
+                );
               })}
             </div>
           ))}
